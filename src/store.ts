@@ -18,19 +18,33 @@ function debounce<T extends (...args: Parameters<T>) => void>(
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useNotesStore() {
-  const [modules, setModules] = useState<Module[]>([]);
+  const [modules, setModules]               = useState<Module[]>([]);
   const [activeModuleId, setActiveModuleId] = useState<string | null>(null);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
-  const [isLoading, setIsLoading] = useState(true);
-  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
+  const [isLoading, setIsLoading]           = useState(true);
+  const [saveStatus, setSaveStatus]         = useState<'saved' | 'saving' | 'unsaved'>('saved');
+  const [sidebarVisible, setSidebarVisible] = useState(true);
 
   // Always-current ref — avoids stale closures in all callbacks
-  const modulesRef = useRef<Module[]>([]);
+  const modulesRef       = useRef<Module[]>([]);
+  const activeModuleRef  = useRef<string | null>(null);
+  const activeSectionRef = useRef<string | null>(null);
 
   const applyModules = useCallback((updated: Module[]) => {
     modulesRef.current = updated;
     setModules(updated);
+  }, []);
+
+  // Keep refs in sync with state
+  const setActiveModuleIdSynced = useCallback((id: string | null) => {
+    activeModuleRef.current = id;
+    setActiveModuleId(id);
+  }, []);
+
+  const setActiveSectionIdSynced = useCallback((id: string | null) => {
+    activeSectionRef.current = id;
+    setActiveSectionId(id);
   }, []);
 
   // ── Persistence ─────────────────────────────────────────────────────────────
@@ -42,9 +56,9 @@ export function useNotesStore() {
       applyModules(data);
       if (data.length > 0) {
         setExpandedModules(new Set([data[0].id]));
-        setActiveModuleId(data[0].id);
+        setActiveModuleIdSynced(data[0].id);
         if (data[0].sections.length > 0) {
-          setActiveSectionId(data[0].sections[0].id);
+          setActiveSectionIdSynced(data[0].sections[0].id);
         }
       }
     } catch (err) {
@@ -53,12 +67,9 @@ export function useNotesStore() {
     } finally {
       setIsLoading(false);
     }
-  }, [applyModules]);
+  }, [applyModules, setActiveModuleIdSynced, setActiveSectionIdSynced]);
 
-  /**
-   * Full save — rewrites index.json + all section files.
-   * Used for structural changes: create/rename/delete module or section.
-   */
+  /** Full save — rewrites index.json + all section files */
   const fullSave = useCallback(async (updated: Module[]) => {
     if (!window.notesAPI) return;
     setSaveStatus('saving');
@@ -71,25 +82,32 @@ export function useNotesStore() {
     }
   }, []);
 
-  /**
-   * Partial save — only rewrites the content of one section file.
-   * Debounced 600 ms so it doesn't fire on every keystroke.
-   */
+  /** Immediate full save of current state — used by Ctrl+S */
+  const forceSave = useCallback(async () => {
+    if (!window.notesAPI) return;
+    setSaveStatus('saving');
+    try {
+      await window.notesAPI.save(modulesRef.current);
+      setSaveStatus('saved');
+    } catch (err) {
+      console.error('Force save failed:', err);
+      setSaveStatus('unsaved');
+    }
+  }, []);
+
+  /** Partial save — debounced 600ms, only rewrites one section file */
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedSaveSection = useCallback(
-    debounce(
-      async (moduleId: string, sectionId: string, content: string) => {
-        if (!window.notesAPI?.saveSection) return;
-        try {
-          await window.notesAPI.saveSection(moduleId, sectionId, content);
-          setSaveStatus('saved');
-        } catch (err) {
-          console.error('Section save failed:', err);
-          setSaveStatus('unsaved');
-        }
-      },
-      600,
-    ),
+    debounce(async (moduleId: string, sectionId: string, content: string) => {
+      if (!window.notesAPI?.saveSection) return;
+      try {
+        await window.notesAPI.saveSection(moduleId, sectionId, content);
+        setSaveStatus('saved');
+      } catch (err) {
+        console.error('Section save failed:', err);
+        setSaveStatus('unsaved');
+      }
+    }, 600),
     [],
   );
 
@@ -100,6 +118,10 @@ export function useNotesStore() {
     const mod = modules.find((m) => m.id === activeModuleId);
     return mod?.sections.find((s) => s.id === activeSectionId) ?? null;
   })();
+
+  // ── Sidebar ──────────────────────────────────────────────────────────────────
+
+  const toggleSidebar = useCallback(() => setSidebarVisible((v) => !v), []);
 
   // ── Module actions ───────────────────────────────────────────────────────────
 
@@ -112,124 +134,113 @@ export function useNotesStore() {
   }, []);
 
   const addModule = useCallback(() => {
-    const newSection: NoteSection = {
-      id: uuidv4(),
-      title: 'New Section',
-      content: '',
-      language: 'javascript',
-    };
-    const newModule: Module = {
-      id: uuidv4(),
-      moduleName: 'New Module',
-      sections: [newSection],
-    };
+    const newSection: NoteSection = { id: uuidv4(), title: 'New Section', content: '', language: 'javascript' };
+    const newModule: Module       = { id: uuidv4(), moduleName: 'New Module', sections: [newSection] };
     const updated = [...modulesRef.current, newModule];
     applyModules(updated);
-    fullSave(updated);                                   // structural → full save
+    fullSave(updated);
     setExpandedModules((prev) => new Set([...prev, newModule.id]));
-    setActiveModuleId(newModule.id);
-    setActiveSectionId(newSection.id);
+    setActiveModuleIdSynced(newModule.id);
+    setActiveSectionIdSynced(newSection.id);
+  }, [applyModules, fullSave, setActiveModuleIdSynced, setActiveSectionIdSynced]);
+
+  const renameModule = useCallback((moduleId: string, name: string) => {
+    const updated = modulesRef.current.map((m) =>
+      m.id === moduleId ? { ...m, moduleName: name } : m,
+    );
+    applyModules(updated);
+    fullSave(updated);
   }, [applyModules, fullSave]);
 
-  const renameModule = useCallback(
-    (moduleId: string, name: string) => {
-      const updated = modulesRef.current.map((m) =>
-        m.id === moduleId ? { ...m, moduleName: name } : m,
-      );
-      applyModules(updated);
-      fullSave(updated);                                 // folder rename → full save
-    },
-    [applyModules, fullSave],
-  );
-
-  const deleteModule = useCallback(
-    (moduleId: string) => {
-      const updated = modulesRef.current.filter((m) => m.id !== moduleId);
-      applyModules(updated);
-      fullSave(updated);                                 // structural → full save
-      setActiveModuleId((prev) => (prev === moduleId ? null : prev));
-      setActiveSectionId((prev) => {
-        const deletedMod = modulesRef.current.find((m) => m.id === moduleId);
-        const sectionIds = new Set(deletedMod?.sections.map((s) => s.id) ?? []);
-        return prev && sectionIds.has(prev) ? null : prev;
-      });
-    },
-    [applyModules, fullSave],
-  );
+  const deleteModule = useCallback((moduleId: string) => {
+    const updated = modulesRef.current.filter((m) => m.id !== moduleId);
+    applyModules(updated);
+    fullSave(updated);
+    setActiveModuleIdSynced(activeModuleRef.current === moduleId ? null : activeModuleRef.current);
+    setActiveSectionIdSynced(
+      activeSectionRef.current && new Set(
+        modulesRef.current.find((m) => m.id === moduleId)?.sections.map((s) => s.id) ?? []
+      ).has(activeSectionRef.current)
+        ? null
+        : activeSectionRef.current,
+    );
+  }, [applyModules, fullSave, setActiveModuleIdSynced, setActiveSectionIdSynced]);
 
   // ── Section actions ──────────────────────────────────────────────────────────
 
   const selectSection = useCallback((moduleId: string, sectionId: string) => {
-    setActiveModuleId(moduleId);
-    setActiveSectionId(sectionId);
-  }, []);
+    setActiveModuleIdSynced(moduleId);
+    setActiveSectionIdSynced(sectionId);
+  }, [setActiveModuleIdSynced, setActiveSectionIdSynced]);
 
-  const addSection = useCallback(
-    (moduleId: string) => {
-      const newSection: NoteSection = {
-        id: uuidv4(),
-        title: 'New Section',
-        content: '',
-        language: 'javascript',
-      };
-      const updated = modulesRef.current.map((m) =>
-        m.id === moduleId
-          ? { ...m, sections: [...m.sections, newSection] }
-          : m,
-      );
-      applyModules(updated);
-      fullSave(updated);                                 // structural → full save
-      setActiveModuleId(moduleId);
-      setActiveSectionId(newSection.id);
-      setExpandedModules((prev) => new Set([...prev, moduleId]));
-    },
-    [applyModules, fullSave],
-  );
+  const addSection = useCallback((moduleId: string) => {
+    const newSection: NoteSection = { id: uuidv4(), title: 'New Section', content: '', language: 'javascript' };
+    const updated = modulesRef.current.map((m) =>
+      m.id === moduleId ? { ...m, sections: [...m.sections, newSection] } : m,
+    );
+    applyModules(updated);
+    fullSave(updated);
+    setActiveModuleIdSynced(moduleId);
+    setActiveSectionIdSynced(newSection.id);
+    setExpandedModules((prev) => new Set([...prev, moduleId]));
+  }, [applyModules, fullSave, setActiveModuleIdSynced, setActiveSectionIdSynced]);
 
   const updateSection = useCallback(
     (moduleId: string, sectionId: string, patch: Partial<NoteSection>) => {
       const updated = modulesRef.current.map((m) =>
         m.id === moduleId
-          ? {
-              ...m,
-              sections: m.sections.map((s) =>
-                s.id === sectionId ? { ...s, ...patch } : s,
-              ),
-            }
+          ? { ...m, sections: m.sections.map((s) => s.id === sectionId ? { ...s, ...patch } : s) }
           : m,
       );
       applyModules(updated);
 
-      const isContentOnly =
-        Object.keys(patch).length === 1 && 'content' in patch;
-
-      if (isContentOnly) {
-        // Only content changed → fast debounced partial save
+      if (Object.keys(patch).length === 1 && 'content' in patch) {
         setSaveStatus('unsaved');
         debouncedSaveSection(moduleId, sectionId, patch.content as string);
       } else {
-        // Title or language changed → full save (index.json must be updated)
         fullSave(updated);
       }
     },
     [applyModules, fullSave, debouncedSaveSection],
   );
 
-  const deleteSection = useCallback(
-    (moduleId: string, sectionId: string) => {
-      const updated = modulesRef.current.map((m) =>
-        m.id === moduleId
-          ? { ...m, sections: m.sections.filter((s) => s.id !== sectionId) }
-          : m,
-      );
-      applyModules(updated);
-      fullSave(updated);                                 // structural → full save
-      setActiveSectionId((prev) => (prev === sectionId ? null : prev));
-    },
-    [applyModules, fullSave],
-  );
+  const deleteSection = useCallback((moduleId: string, sectionId: string) => {
+    const updated = modulesRef.current.map((m) =>
+      m.id === moduleId
+        ? { ...m, sections: m.sections.filter((s) => s.id !== sectionId) }
+        : m,
+    );
+    applyModules(updated);
+    fullSave(updated);
+    setActiveSectionIdSynced(activeSectionRef.current === sectionId ? null : activeSectionRef.current);
+  }, [applyModules, fullSave, setActiveSectionIdSynced]);
+
+  /**
+   * Move the active section up or down within its module.
+   * direction: -1 = up, +1 = down
+   */
+  const moveSection = useCallback((direction: -1 | 1) => {
+    const modId = activeModuleRef.current;
+    const secId = activeSectionRef.current;
+    if (!modId || !secId) return;
+
+    const updated = modulesRef.current.map((m) => {
+      if (m.id !== modId) return m;
+      const idx = m.sections.findIndex((s) => s.id === secId);
+      if (idx === -1) return m;
+      const newIdx = idx + direction;
+      if (newIdx < 0 || newIdx >= m.sections.length) return m;
+      const sections = [...m.sections];
+      [sections[idx], sections[newIdx]] = [sections[newIdx], sections[idx]];
+      return { ...m, sections };
+    });
+
+    applyModules(updated);
+    fullSave(updated);
+  }, [applyModules, fullSave]);
 
   return {
+    // State
     modules,
     activeModuleId,
     activeSectionId,
@@ -237,7 +248,11 @@ export function useNotesStore() {
     expandedModules,
     isLoading,
     saveStatus,
+    sidebarVisible,
+    // Actions
     loadNotes,
+    forceSave,
+    toggleSidebar,
     toggleModule,
     addModule,
     renameModule,
@@ -246,5 +261,6 @@ export function useNotesStore() {
     addSection,
     updateSection,
     deleteSection,
+    moveSection,
   };
 }

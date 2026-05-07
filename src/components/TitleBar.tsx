@@ -60,9 +60,12 @@ interface TitleBarProps {
   onAddModule: () => void;
   onAddSection: () => void;
   onFind: () => void;
+  onForceSave: () => void;
+  onToggleSidebar: () => void;
+  onQuickOpen: () => void;
 }
 
-export function TitleBar({ onAddModule, onAddSection, onFind }: TitleBarProps) {
+export function TitleBar({ onAddModule, onAddSection, onFind, onForceSave, onToggleSidebar, onQuickOpen }: TitleBarProps) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [isMaximized, setIsMaximized] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
@@ -96,73 +99,37 @@ export function TitleBar({ onAddModule, onAddSection, onFind }: TitleBarProps) {
     {
       label: 'Archivo',
       items: [
-        {
-          label: 'Nuevo módulo',
-          shortcut: 'Ctrl+M',
-          action: () => { onAddModule(); },
-        },
-        {
-          label: 'Nueva sección',
-          shortcut: 'Ctrl+Shift+N',
-          action: () => { onAddSection(); },
-        },
+        { label: 'Nuevo módulo',    shortcut: 'Ctrl+M',         action: onAddModule },
+        { label: 'Nueva sección',   shortcut: 'Ctrl+Shift+N',   action: onAddSection },
         { separator: true },
-        {
-          label: 'Abrir carpeta de datos',
-          action: () => window.menuAPI?.openDataFolder(),
-        },
+        { label: 'Guardar ahora',   shortcut: 'Ctrl+S',         action: onForceSave },
         { separator: true },
-        {
-          label: 'Cerrar aplicación',
-          shortcut: 'Alt+F4',
-          action: () => window.windowAPI?.close(),
-        },
+        { label: 'Abrir carpeta de datos', action: () => window.menuAPI?.openDataFolder() },
+        { separator: true },
+        { label: 'Cerrar aplicación', shortcut: 'Alt+F4',       action: () => window.windowAPI?.close() },
       ],
     },
     {
       label: 'Ver',
       items: [
-        {
-          label: 'Buscar en editor',
-          shortcut: 'Ctrl+F',
-          action: () => { onFind(); },
-        },
+        { label: 'Búsqueda rápida', shortcut: 'Ctrl+P',         action: onQuickOpen },
+        { label: 'Buscar en editor',shortcut: 'Ctrl+F',         action: onFind },
         { separator: true },
-        {
-          label: 'Recargar',
-          shortcut: 'Ctrl+R',
-          action: () => window.menuAPI?.reload(),
-        },
-        {
-          label: 'Herramientas de desarrollo',
-          shortcut: 'F12',
-          action: () => window.menuAPI?.devtools(),
-        },
+        { label: 'Alternar sidebar',shortcut: 'Ctrl+\\',        action: onToggleSidebar },
+        { separator: true },
+        { label: 'Recargar',        shortcut: 'Ctrl+R',         action: () => window.menuAPI?.reload() },
+        { label: 'Herramientas de desarrollo', shortcut: 'F12', action: () => window.menuAPI?.devtools() },
       ],
     },
     {
       label: 'Herramientas',
       items: [
-        {
-          label: 'Abrir carpeta de datos',
-          action: () => window.menuAPI?.openDataFolder(),
-        },
+        { label: 'Abrir carpeta de datos',    action: () => window.menuAPI?.openDataFolder() },
         { separator: true },
-        {
-          label: 'Herramientas de desarrollo',
-          shortcut: 'F12',
-          action: () => window.menuAPI?.devtools(),
-        },
-        {
-          label: 'Recargar ventana',
-          shortcut: 'Ctrl+R',
-          action: () => window.menuAPI?.reload(),
-        },
+        { label: 'Herramientas de desarrollo',shortcut: 'F12',  action: () => window.menuAPI?.devtools() },
+        { label: 'Recargar ventana',          shortcut: 'Ctrl+R', action: () => window.menuAPI?.reload() },
         { separator: true },
-        {
-          label: 'Acerca de DevNotes',
-          action: () => window.menuAPI?.about(),
-        },
+        { label: 'Acerca de BlocDev',         action: () => window.menuAPI?.about() },
       ],
     },
   ];

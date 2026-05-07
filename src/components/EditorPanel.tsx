@@ -29,8 +29,9 @@ loader.config({ monaco });
 interface EditorPanelProps {
   section: NoteSection | null;
   saveStatus: 'saved' | 'saving' | 'unsaved';
-  /** Ref populated with a function that opens Monaco's Find widget */
   triggerFindRef: RefObject<(() => void) | null>;
+  activeModuleId: string | null;
+  activeSectionId: string | null;
   onUpdateSection: (patch: Partial<NoteSection>) => void;
 }
 
@@ -58,7 +59,7 @@ function Kbd({ children }: { children: React.ReactNode }) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function EditorPanel({ section, saveStatus, triggerFindRef, onUpdateSection }: EditorPanelProps) {
+export function EditorPanel({ section, saveStatus, triggerFindRef, activeModuleId, activeSectionId, onUpdateSection }: EditorPanelProps) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
 
   const handleMount: OnMount = useCallback((editorInstance) => {
@@ -140,6 +141,17 @@ export function EditorPanel({ section, saveStatus, triggerFindRef, onUpdateSecti
             </option>
           ))}
         </select>
+
+        {/* Open in explorer */}
+        {activeModuleId && activeSectionId && (
+          <button
+            onClick={() => window.menuAPI?.openSectionFile(activeModuleId, activeSectionId)}
+            title="Abrir archivo en explorador"
+            className="text-white/20 hover:text-indigo-400 text-xs font-mono transition-colors shrink-0"
+          >
+            ↗
+          </button>
+        )}
 
         {/* Find hint */}
         <span className="hidden sm:flex items-center gap-1 text-white/20 text-[10px] font-mono shrink-0">
