@@ -95,6 +95,25 @@ export function useNotesStore() {
     }
   }, []);
 
+  /** Save As — opens native dialog, exports section to chosen path */
+  const saveAs = useCallback(async () => {
+    const modId = activeModuleRef.current;
+    const secId = activeSectionRef.current;
+    if (!modId || !secId || !window.notesAPI?.saveAs) return;
+
+    // Flush any pending debounced content first
+    await forceSave();
+
+    const mod = modulesRef.current.find((m) => m.id === modId);
+    const sec = mod?.sections.find((s) => s.id === secId);
+    if (!sec) return;
+
+    const result = await window.notesAPI.saveAs(modId, secId, sec.title, sec.language);
+    if (result.success) {
+      setSaveStatus('saved');
+    }
+  }, [forceSave]);
+
   /** Partial save — debounced 600ms, only rewrites one section file */
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedSaveSection = useCallback(
@@ -134,7 +153,7 @@ export function useNotesStore() {
   }, []);
 
   const addModule = useCallback(() => {
-    const newSection: NoteSection = { id: uuidv4(), title: 'New Section', content: '', language: 'javascript' };
+    const newSection: NoteSection = { id: uuidv4(), title: 'New Section', content: '', language: 'plaintext' };
     const newModule: Module       = { id: uuidv4(), moduleName: 'New Module', sections: [newSection] };
     const updated = [...modulesRef.current, newModule];
     applyModules(updated);
@@ -174,7 +193,7 @@ export function useNotesStore() {
   }, [setActiveModuleIdSynced, setActiveSectionIdSynced]);
 
   const addSection = useCallback((moduleId: string) => {
-    const newSection: NoteSection = { id: uuidv4(), title: 'New Section', content: '', language: 'javascript' };
+    const newSection: NoteSection = { id: uuidv4(), title: 'New Section', content: '', language: 'plaintext' };
     const updated = modulesRef.current.map((m) =>
       m.id === moduleId ? { ...m, sections: [...m.sections, newSection] } : m,
     );
@@ -252,6 +271,7 @@ export function useNotesStore() {
     // Actions
     loadNotes,
     forceSave,
+    saveAs,
     toggleSidebar,
     toggleModule,
     addModule,

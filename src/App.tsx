@@ -17,6 +17,7 @@ export default function App() {
     sidebarVisible,
     loadNotes,
     forceSave,
+    saveAs,
     toggleSidebar,
     toggleModule,
     addModule,
@@ -32,8 +33,8 @@ export default function App() {
   const [quickOpenVisible, setQuickOpenVisible] = useState(false);
 
   // Always-current ref — avoids stale closures in event handlers
-  const stateRef = useRef({ activeModuleId, addModule, addSection, forceSave, moveSection });
-  stateRef.current = { activeModuleId, addModule, addSection, forceSave, moveSection };
+  const stateRef = useRef({ activeModuleId, addModule, addSection, forceSave, saveAs, moveSection });
+  stateRef.current = { activeModuleId, addModule, addSection, forceSave, saveAs, moveSection };
 
   // Load notes on mount
   useEffect(() => { loadNotes(); }, [loadNotes]);
@@ -58,6 +59,12 @@ export default function App() {
         e.preventDefault();
         const { activeModuleId: modId, addSection: addSec } = stateRef.current;
         if (modId) addSec(modId);
+        return;
+      }
+      // Ctrl + Shift + S → save as
+      if (e.ctrlKey && !e.altKey && e.shiftKey && e.code === 'KeyS') {
+        e.preventDefault();
+        stateRef.current.saveAs();
         return;
       }
       // Ctrl + \ → toggle sidebar
@@ -130,6 +137,7 @@ export default function App() {
         }}
         onFind={handleFind}
         onForceSave={() => stateRef.current.forceSave()}
+        onSaveAs={() => stateRef.current.saveAs()}
         onToggleSidebar={toggleSidebar}
         onQuickOpen={() => setQuickOpenVisible(true)}
       />

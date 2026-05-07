@@ -61,11 +61,12 @@ interface TitleBarProps {
   onAddSection: () => void;
   onFind: () => void;
   onForceSave: () => void;
+  onSaveAs: () => void;
   onToggleSidebar: () => void;
   onQuickOpen: () => void;
 }
 
-export function TitleBar({ onAddModule, onAddSection, onFind, onForceSave, onToggleSidebar, onQuickOpen }: TitleBarProps) {
+export function TitleBar({ onAddModule, onAddSection, onFind, onForceSave, onSaveAs, onToggleSidebar, onQuickOpen }: TitleBarProps) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [isMaximized, setIsMaximized] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
@@ -102,7 +103,8 @@ export function TitleBar({ onAddModule, onAddSection, onFind, onForceSave, onTog
         { label: 'Nuevo módulo',    shortcut: 'Ctrl+M',         action: onAddModule },
         { label: 'Nueva sección',   shortcut: 'Ctrl+Shift+N',   action: onAddSection },
         { separator: true },
-        { label: 'Guardar ahora',   shortcut: 'Ctrl+S',         action: onForceSave },
+        { label: 'Guardar',        shortcut: 'Ctrl+S',         action: onForceSave },
+        { label: 'Guardar como…',  shortcut: 'Ctrl+Shift+S',   action: onSaveAs },
         { separator: true },
         { label: 'Abrir carpeta de datos', action: () => window.menuAPI?.openDataFolder() },
         { separator: true },

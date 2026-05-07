@@ -220,7 +220,49 @@ ipcMain.handle(
   },
 );
 
-// ─── IPC — Window controls ────────────────────────────────────────────────────
+// ─── IPC — Save / Save As ────────────────────────────────────────────────────
+
+/**
+ * Save As: shows a native save dialog and writes the active section's content
+ * to the chosen path. Does NOT move the file inside dev-notes — it's an export.
+ */
+ipcMain.handle(
+  'notes:saveAs',
+  async (_e, moduleId: string, sectionId: string, defaultTitle: string, language: string) => {
+    if (!mainWindow) return { success: false, canceled: true };
+
+    const ext = extFor(language);
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: 'Guardar sección como…',
+      defaultPath: path.join(app.getPath('documents'), `${safeName(defaultTitle)}.${ext}`),
+      filters: [
+        { name: `${language.charAt(0).toUpperCase() + language.slice(1)} files`, extensions: [ext] },
+        { name: 'Text files', extensions: ['txt'] },
+        { name: 'All files', extensions: ['*'] },
+      ],
+    });
+
+    if (canceled || !filePath) return { success: false, canceled: true };
+
+    try {
+      // Read current content from the internal file
+      if (!fs.existsSync(INDEX_FILE)) return { success: false, canceled: false };
+      const index: ModuleMeta[] = JSON.parse(fs.readFileSync(INDEX_FILE, 'utf-8'));
+      const mod = index.find((m) => m.id === moduleId);
+      if (!mod) return { success: false, canceled: false };
+      const sec = mod.sections.find((s) => s.id === sectionId);
+      if (!sec) return { success: false, canceled: false };
+      const srcPath = path.join(ROOT_DIR, mod.folder, sec.file);
+      const content = fs.existsSync(srcPath)
+        ? fs.readFileSync(srcPath, 'utf-8')
+        : '';
+      atomicWrite(filePath, normalizeContent(content));
+      return { success: true, canceled: false, filePath };
+    } catch {
+      return { success: false, canceled: false };
+    }
+  },
+);
 
 ipcMain.on('window:minimize',    () => mainWindow?.minimize());
 ipcMain.on('window:maximize',    () => {

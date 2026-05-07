@@ -24,6 +24,14 @@ const notesAPI = {
 
   saveSection: (moduleId: string, sectionId: string, content: string): Promise<{ success: boolean }> =>
     ipcRenderer.invoke('notes:saveSection', moduleId, sectionId, content),
+
+  saveAs: (
+    moduleId: string,
+    sectionId: string,
+    defaultTitle: string,
+    language: string,
+  ): Promise<{ success: boolean; canceled: boolean; filePath?: string }> =>
+    ipcRenderer.invoke('notes:saveAs', moduleId, sectionId, defaultTitle, language),
 };
 
 // ─── Window API ───────────────────────────────────────────────────────────────

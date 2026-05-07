@@ -4,6 +4,12 @@ interface NotesAPI {
   load: () => Promise<Module[]>;
   save: (modules: Module[]) => Promise<{ success: boolean }>;
   saveSection: (moduleId: string, sectionId: string, content: string) => Promise<{ success: boolean }>;
+  saveAs: (
+    moduleId: string,
+    sectionId: string,
+    defaultTitle: string,
+    language: string,
+  ) => Promise<{ success: boolean; canceled: boolean; filePath?: string }>;
 }
 
 interface WindowAPI {
