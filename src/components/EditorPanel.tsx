@@ -1,4 +1,4 @@
-import { useRef, useCallback, type RefObject } from 'react';
+import { useRef, useCallback, useState, useEffect, type RefObject } from 'react';
 import MonacoEditor, { type OnMount, loader } from '@monaco-editor/react';
 import type { editor } from 'monaco-editor';
 import type { NoteSection } from '../types';
@@ -62,6 +62,12 @@ function Kbd({ children }: { children: React.ReactNode }) {
 export function EditorPanel({ section, saveStatus, triggerFindRef, activeModuleId, activeSectionId, onUpdateSection }: EditorPanelProps) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
 
+  // Controlled title input — syncs when section changes
+  const [titleDraft, setTitleDraft] = useState(section?.title ?? '');
+  useEffect(() => {
+    setTitleDraft(section?.title ?? '');
+  }, [section?.id, section?.title]);
+
   const handleMount: OnMount = useCallback((editorInstance) => {
     editorRef.current = editorInstance;
     editorInstance.focus();
@@ -114,16 +120,23 @@ export function EditorPanel({ section, saveStatus, triggerFindRef, activeModuleI
       <div className="flex items-center gap-3 px-4 py-2 border-b border-white/5 shrink-0">
         {/* Section title */}
         <input
-          key={section.id}
-          defaultValue={section.title}
-          onBlur={(e) => {
-            const trimmed = e.target.value.trim();
+          value={titleDraft}
+          onChange={(e) => setTitleDraft(e.target.value)}
+          onBlur={() => {
+            const trimmed = titleDraft.trim();
             if (trimmed && trimmed !== section.title) {
               onUpdateSection({ title: trimmed });
+            } else {
+              // Revert to saved title if empty or unchanged
+              setTitleDraft(section.title);
             }
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+            if (e.key === 'Escape') {
+              setTitleDraft(section.title);
+              (e.target as HTMLInputElement).blur();
+            }
           }}
           className="bg-transparent text-white font-semibold text-sm outline-none border-b border-transparent focus:border-indigo-400 transition-colors min-w-0 flex-1"
           placeholder="Section title…"

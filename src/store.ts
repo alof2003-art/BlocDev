@@ -106,9 +106,11 @@ export function useNotesStore() {
 
     const mod = modulesRef.current.find((m) => m.id === modId);
     const sec = mod?.sections.find((s) => s.id === secId);
-    if (!sec) return;
+    if (!mod || !sec) return;
 
-    const result = await window.notesAPI.saveAs(modId, secId, sec.title, sec.language);
+    const result = await window.notesAPI.saveAs(
+      modId, secId, mod.moduleName, sec.title, sec.language,
+    );
     if (result.success) {
       setSaveStatus('saved');
     }
@@ -204,6 +206,19 @@ export function useNotesStore() {
     setExpandedModules((prev) => new Set([...prev, moduleId]));
   }, [applyModules, fullSave, setActiveModuleIdSynced, setActiveSectionIdSynced]);
 
+  const renameSection = useCallback(
+    (moduleId: string, sectionId: string, title: string) => {
+      const updated = modulesRef.current.map((m) =>
+        m.id === moduleId
+          ? { ...m, sections: m.sections.map((s) => s.id === sectionId ? { ...s, title } : s) }
+          : m,
+      );
+      applyModules(updated);
+      fullSave(updated); // title change → full save (index.json + file rename)
+    },
+    [applyModules, fullSave],
+  );
+
   const updateSection = useCallback(
     (moduleId: string, sectionId: string, patch: Partial<NoteSection>) => {
       const updated = modulesRef.current.map((m) =>
@@ -258,6 +273,56 @@ export function useNotesStore() {
     fullSave(updated);
   }, [applyModules, fullSave]);
 
+  /**
+   * Import a BlocDev .txt file. If it has a valid header, creates a new section
+   * inside an existing module (matched by name) or a new one.
+   */
+  const importFile = useCallback(async () => {
+    if (!window.notesAPI?.importFile) return;
+
+    const result = await window.notesAPI.importFile();
+    if (!result.success || result.canceled) return;
+
+    const moduleName   = result.module   ?? 'Importado';
+    const sectionTitle = result.section  ?? 'Importado';
+    const language     = result.language ?? 'plaintext';
+    const content      = result.content  ?? '';
+
+    // Find existing module by name (case-insensitive) or create new one
+    const existing = modulesRef.current.find(
+      (m) => m.moduleName.toLowerCase() === moduleName.toLowerCase(),
+    );
+
+    const newSection: NoteSection = {
+      id: uuidv4(), title: sectionTitle, content, language,
+    };
+
+    let updated: Module[];
+    let targetModuleId: string;
+
+    if (existing) {
+      targetModuleId = existing.id;
+      updated = modulesRef.current.map((m) =>
+        m.id === existing.id
+          ? { ...m, sections: [...m.sections, newSection] }
+          : m,
+      );
+    } else {
+      const newModule: Module = { id: uuidv4(), moduleName, sections: [newSection] };
+      targetModuleId = newModule.id;
+      updated = [...modulesRef.current, newModule];
+      setExpandedModules((prev) => new Set([...prev, newModule.id]));
+    }
+
+    applyModules(updated);
+    fullSave(updated);
+    setExpandedModules((prev) => new Set([...prev, targetModuleId]));
+    setActiveModuleIdSynced(targetModuleId);
+    setActiveSectionIdSynced(newSection.id);
+  }, [applyModules, fullSave, setActiveModuleIdSynced, setActiveSectionIdSynced]);
+
+  // ── Return ───────────────────────────────────────────────────────────────────
+
   return {
     // State
     modules,
@@ -272,6 +337,7 @@ export function useNotesStore() {
     loadNotes,
     forceSave,
     saveAs,
+    importFile,
     toggleSidebar,
     toggleModule,
     addModule,
@@ -279,6 +345,7 @@ export function useNotesStore() {
     deleteModule,
     selectSection,
     addSection,
+    renameSection,
     updateSection,
     deleteSection,
     moveSection,

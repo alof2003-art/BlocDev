@@ -18,6 +18,7 @@ export default function App() {
     loadNotes,
     forceSave,
     saveAs,
+    importFile,
     toggleSidebar,
     toggleModule,
     addModule,
@@ -25,6 +26,7 @@ export default function App() {
     deleteModule,
     selectSection,
     addSection,
+    renameSection,
     updateSection,
     deleteSection,
     moveSection,
@@ -33,16 +35,19 @@ export default function App() {
   const [quickOpenVisible, setQuickOpenVisible] = useState(false);
 
   // Always-current ref — avoids stale closures in event handlers
-  const stateRef = useRef({ activeModuleId, addModule, addSection, forceSave, saveAs, moveSection });
-  stateRef.current = { activeModuleId, addModule, addSection, forceSave, saveAs, moveSection };
+  const stateRef = useRef({
+    activeModuleId, addModule, addSection,
+    forceSave, saveAs, importFile, moveSection,
+  });
+  stateRef.current = {
+    activeModuleId, addModule, addSection,
+    forceSave, saveAs, importFile, moveSection,
+  };
 
   // Load notes on mount
   useEffect(() => { loadNotes(); }, [loadNotes]);
 
   // ── Renderer-side keyboard shortcuts ──────────────────────────────────────
-  // These handle keys that Monaco doesn't intercept.
-  // Keys that Monaco swallows (Ctrl+S, Ctrl+P, etc.) are handled via
-  // IPC from the main process (see shortcutsAPI listeners below).
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName;
@@ -61,10 +66,16 @@ export default function App() {
         if (modId) addSec(modId);
         return;
       }
-      // Ctrl + Shift + S → save as
+      // Ctrl + Shift + S → save as (export)
       if (e.ctrlKey && !e.altKey && e.shiftKey && e.code === 'KeyS') {
         e.preventDefault();
         stateRef.current.saveAs();
+        return;
+      }
+      // Ctrl + I → import
+      if (e.ctrlKey && !e.altKey && !e.shiftKey && e.code === 'KeyI' && !isInput) {
+        e.preventDefault();
+        stateRef.current.importFile();
         return;
       }
       // Ctrl + \ → toggle sidebar
@@ -91,27 +102,20 @@ export default function App() {
     return () => window.removeEventListener('keydown', handler, { capture: true });
   }, [toggleSidebar]);
 
-  // ── IPC shortcut listeners (main process → renderer) ──────────────────────
-  // These fire for shortcuts that Monaco would otherwise swallow.
+  // ── IPC shortcut listeners (main → renderer) ──────────────────────────────
   useEffect(() => {
     if (!window.shortcutsAPI) return;
-
     const unsubForceSave     = window.shortcutsAPI.onForceSave(() => stateRef.current.forceSave());
     const unsubToggleSidebar = window.shortcutsAPI.onToggleSidebar(() => toggleSidebar());
     const unsubMoveUp        = window.shortcutsAPI.onMoveSectionUp(() => stateRef.current.moveSection(-1));
     const unsubMoveDown      = window.shortcutsAPI.onMoveSectionDown(() => stateRef.current.moveSection(1));
     const unsubQuickOpen     = window.shortcutsAPI.onQuickOpen(() => setQuickOpenVisible(true));
-
     return () => {
-      unsubForceSave();
-      unsubToggleSidebar();
-      unsubMoveUp();
-      unsubMoveDown();
-      unsubQuickOpen();
+      unsubForceSave(); unsubToggleSidebar();
+      unsubMoveUp(); unsubMoveDown(); unsubQuickOpen();
     };
   }, [toggleSidebar]);
 
-  // Ref forwarded to EditorPanel so TitleBar/App can trigger Monaco Find
   const triggerFindRef = useRef<(() => void) | null>(null);
   const handleFind = () => triggerFindRef.current?.();
 
@@ -138,13 +142,13 @@ export default function App() {
         onFind={handleFind}
         onForceSave={() => stateRef.current.forceSave()}
         onSaveAs={() => stateRef.current.saveAs()}
+        onImport={() => stateRef.current.importFile()}
         onToggleSidebar={toggleSidebar}
         onQuickOpen={() => setQuickOpenVisible(true)}
       />
 
       {/* ── Main content ── */}
       <div className="flex flex-1 min-h-0 pt-9">
-        {/* Sidebar — hidden when toggled */}
         {sidebarVisible && (
           <Sidebar
             modules={modules}
@@ -156,12 +160,12 @@ export default function App() {
             onAddModule={addModule}
             onAddSection={addSection}
             onRenameModule={renameModule}
+            onRenameSection={renameSection}
             onDeleteModule={deleteModule}
             onDeleteSection={deleteSection}
           />
         )}
 
-        {/* Editor */}
         <main className="flex-1 flex flex-col min-w-0">
           <EditorPanel
             section={activeSection}
@@ -178,7 +182,6 @@ export default function App() {
         </main>
       </div>
 
-      {/* ── Quick Open overlay ── */}
       {quickOpenVisible && (
         <QuickOpen
           modules={modules}

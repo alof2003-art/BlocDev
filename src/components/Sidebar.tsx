@@ -11,6 +11,7 @@ interface SidebarProps {
   onAddModule: () => void;
   onAddSection: (moduleId: string) => void;
   onRenameModule: (moduleId: string, name: string) => void;
+  onRenameSection: (moduleId: string, sectionId: string, title: string) => void;
   onDeleteModule: (moduleId: string) => void;
   onDeleteSection: (moduleId: string, sectionId: string) => void;
 }
@@ -87,6 +88,7 @@ export function Sidebar({
   onAddModule,
   onAddSection,
   onRenameModule,
+  onRenameSection,
   onDeleteModule,
   onDeleteSection,
 }: SidebarProps) {
@@ -196,7 +198,11 @@ export function Sidebar({
                         onClick={() => onSelectSection(mod.id, sec.id)}
                       >
                         <span className="text-white/20 text-xs">›</span>
-                        <span className="flex-1 truncate">{sec.title}</span>
+                        <EditableLabel
+                          value={sec.title}
+                          onSave={(title) => onRenameSection(mod.id, sec.id, title)}
+                          className="flex-1 truncate"
+                        />
                         <span className="text-[10px] text-white/20 font-mono shrink-0">
                           {sec.language.slice(0, 2).toUpperCase()}
                         </span>

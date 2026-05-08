@@ -7,9 +7,19 @@ interface NotesAPI {
   saveAs: (
     moduleId: string,
     sectionId: string,
-    defaultTitle: string,
+    moduleName: string,
+    sectionTitle: string,
     language: string,
   ) => Promise<{ success: boolean; canceled: boolean; filePath?: string }>;
+  importFile: () => Promise<{
+    success: boolean;
+    canceled: boolean;
+    isBlocDev?: boolean;
+    module?: string;
+    section?: string;
+    language?: string;
+    content?: string;
+  }>;
 }
 
 interface WindowAPI {

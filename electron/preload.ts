@@ -28,10 +28,21 @@ const notesAPI = {
   saveAs: (
     moduleId: string,
     sectionId: string,
-    defaultTitle: string,
+    moduleName: string,
+    sectionTitle: string,
     language: string,
   ): Promise<{ success: boolean; canceled: boolean; filePath?: string }> =>
-    ipcRenderer.invoke('notes:saveAs', moduleId, sectionId, defaultTitle, language),
+    ipcRenderer.invoke('notes:saveAs', moduleId, sectionId, moduleName, sectionTitle, language),
+
+  importFile: (): Promise<{
+    success: boolean;
+    canceled: boolean;
+    isBlocDev?: boolean;
+    module?: string;
+    section?: string;
+    language?: string;
+    content?: string;
+  }> => ipcRenderer.invoke('notes:importFile'),
 };
 
 // ─── Window API ───────────────────────────────────────────────────────────────

@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import { serialize, parse } from './blocdev-format';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -223,46 +224,110 @@ ipcMain.handle(
 // ─── IPC — Save / Save As ────────────────────────────────────────────────────
 
 /**
- * Save As: shows a native save dialog and writes the active section's content
- * to the chosen path. Does NOT move the file inside dev-notes — it's an export.
+ * Save As: exports the active section as a BlocDev .txt file.
+ * The file contains a structured header with module/section/language metadata
+ * so it can be re-imported into BlocDev later, and is still readable in Notepad.
  */
 ipcMain.handle(
   'notes:saveAs',
-  async (_e, moduleId: string, sectionId: string, defaultTitle: string, language: string) => {
+  async (_e, moduleId: string, sectionId: string, moduleName: string, sectionTitle: string, language: string) => {
     if (!mainWindow) return { success: false, canceled: true };
 
-    const ext = extFor(language);
     const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
-      title: 'Guardar sección como…',
-      defaultPath: path.join(app.getPath('documents'), `${safeName(defaultTitle)}.${ext}`),
+      title: 'Exportar sección como BlocDev Note…',
+      defaultPath: path.join(
+        app.getPath('documents'),
+        `${safeName(moduleName)} - ${safeName(sectionTitle)}.txt`,
+      ),
       filters: [
-        { name: `${language.charAt(0).toUpperCase() + language.slice(1)} files`, extensions: [ext] },
-        { name: 'Text files', extensions: ['txt'] },
-        { name: 'All files', extensions: ['*'] },
+        { name: 'BlocDev Note (.txt)', extensions: ['txt'] },
+        { name: 'All files',           extensions: ['*'] },
       ],
     });
 
     if (canceled || !filePath) return { success: false, canceled: true };
 
     try {
-      // Read current content from the internal file
       if (!fs.existsSync(INDEX_FILE)) return { success: false, canceled: false };
       const index: ModuleMeta[] = JSON.parse(fs.readFileSync(INDEX_FILE, 'utf-8'));
       const mod = index.find((m) => m.id === moduleId);
       if (!mod) return { success: false, canceled: false };
       const sec = mod.sections.find((s) => s.id === sectionId);
       if (!sec) return { success: false, canceled: false };
+
       const srcPath = path.join(ROOT_DIR, mod.folder, sec.file);
-      const content = fs.existsSync(srcPath)
-        ? fs.readFileSync(srcPath, 'utf-8')
+      const rawContent = fs.existsSync(srcPath)
+        ? fs.readFileSync(srcPath, 'utf-8').replace(/\r\n/g, '\n')
         : '';
-      atomicWrite(filePath, normalizeContent(content));
+
+      const fileContent = serialize(
+        {
+          module:   moduleName,
+          section:  sectionTitle,
+          language,
+          saved:    new Date().toISOString(),
+        },
+        rawContent,
+      );
+
+      atomicWrite(filePath, normalizeContent(fileContent));
       return { success: true, canceled: false, filePath };
     } catch {
       return { success: false, canceled: false };
     }
   },
 );
+
+/**
+ * Import: opens a BlocDev .txt file, parses the header, and returns the
+ * metadata + content so the renderer can create a new module/section.
+ */
+ipcMain.handle('notes:importFile', async () => {
+  if (!mainWindow) return { success: false, canceled: true };
+
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+    title: 'Importar BlocDev Note…',
+    defaultPath: app.getPath('documents'),
+    filters: [
+      { name: 'BlocDev Note (.txt)', extensions: ['txt'] },
+      { name: 'All files',           extensions: ['*'] },
+    ],
+    properties: ['openFile'],
+  });
+
+  if (canceled || !filePaths[0]) return { success: false, canceled: true };
+
+  try {
+    const raw = fs.readFileSync(filePaths[0], 'utf-8');
+    const result = parse(raw);
+
+    if (!result.ok || !result.meta) {
+      // Not a BlocDev file — import as plaintext with filename as title
+      const title = path.basename(filePaths[0], path.extname(filePaths[0]));
+      return {
+        success:  true,
+        canceled: false,
+        isBlocDev: false,
+        module:   'Importado',
+        section:  title,
+        language: 'plaintext',
+        content:  raw.replace(/\r\n/g, '\n'),
+      };
+    }
+
+    return {
+      success:   true,
+      canceled:  false,
+      isBlocDev: true,
+      module:    result.meta.module,
+      section:   result.meta.section,
+      language:  result.meta.language,
+      content:   result.content,
+    };
+  } catch {
+    return { success: false, canceled: false };
+  }
+});
 
 ipcMain.on('window:minimize',    () => mainWindow?.minimize());
 ipcMain.on('window:maximize',    () => {
@@ -334,6 +399,7 @@ function createWindow(): void {
 
   if (process.env.NODE_ENV === 'development') {
     mainWindow.loadURL('http://localhost:5173');
+    mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }

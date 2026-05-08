@@ -62,11 +62,12 @@ interface TitleBarProps {
   onFind: () => void;
   onForceSave: () => void;
   onSaveAs: () => void;
+  onImport: () => void;
   onToggleSidebar: () => void;
   onQuickOpen: () => void;
 }
 
-export function TitleBar({ onAddModule, onAddSection, onFind, onForceSave, onSaveAs, onToggleSidebar, onQuickOpen }: TitleBarProps) {
+export function TitleBar({ onAddModule, onAddSection, onFind, onForceSave, onSaveAs, onImport, onToggleSidebar, onQuickOpen }: TitleBarProps) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [isMaximized, setIsMaximized] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
@@ -105,6 +106,8 @@ export function TitleBar({ onAddModule, onAddSection, onFind, onForceSave, onSav
         { separator: true },
         { label: 'Guardar',        shortcut: 'Ctrl+S',         action: onForceSave },
         { label: 'Guardar como…',  shortcut: 'Ctrl+Shift+S',   action: onSaveAs },
+        { separator: true },
+        { label: 'Importar nota…', shortcut: 'Ctrl+I',         action: onImport },
         { separator: true },
         { label: 'Abrir carpeta de datos', action: () => window.menuAPI?.openDataFolder() },
         { separator: true },
@@ -149,7 +152,7 @@ export function TitleBar({ onAddModule, onAddSection, onFind, onForceSave, onSav
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       >
         <span className="text-indigo-400 text-base leading-none">⌘</span>
-        <span className="text-white/60 text-xs font-semibold tracking-wide">DevNotes</span>
+        <span className="text-white/60 text-xs font-semibold tracking-wide">BlocDev</span>
       </div>
 
       {/* ── Menu bar ── */}
